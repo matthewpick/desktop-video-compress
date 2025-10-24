@@ -11,7 +11,7 @@ from pathlib import Path
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler, find_handbrake_cli
+from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler, find_handbrake_cli, SUPPORTED_VIDEO_EXTENSIONS
 
 def test_handbrake_check():
     """Test HandBrake availability check.
@@ -59,23 +59,33 @@ def test_handler_creation():
         return False
 
 def test_file_filtering():
-    """Test that handler correctly identifies .mov files."""
+    """Test that handler correctly identifies supported video files."""
     print("\nTest 5: File filtering logic")
     try:
         # This is a simple logic test
         test_cases = [
             ("test.mov", True),
             ("test.MOV", True),
-            ("test.mp4", False),
+            ("test.mp4", True),
+            ("test.MP4", True),
+            ("test.m4v", True),
+            ("test.avi", True),
+            ("test.mkv", True),
+            ("test.webm", True),
+            ("test.flv", True),
+            ("test.wmv", True),
             ("test.txt", False),
+            ("test.jpg", False),
+            ("test.pdf", False),
             ("test_compressed.mov", False),
+            ("test_compressed.mp4", False),
         ]
         
         all_passed = True
         for filename, should_process in test_cases:
-            is_mov = Path(filename).suffix.lower() == '.mov'
+            is_supported = Path(filename).suffix.lower() in SUPPORTED_VIDEO_EXTENSIONS
             is_compressed = '_compressed' in filename
-            would_process = is_mov and not is_compressed
+            would_process = is_supported and not is_compressed
             
             if would_process == should_process:
                 print(f"  ✓ {filename}: {'process' if should_process else 'skip'}")
