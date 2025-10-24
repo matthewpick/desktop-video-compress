@@ -1,12 +1,12 @@
 # Desktop Video Compress
 
-Automatic Desktop Video Compression for macOS - A lightweight background service that watches your Desktop for `.mov` files and automatically compresses them using HandBrake CLI.
+Automatic Desktop Video Compression for macOS - A lightweight background service that watches your Desktop for video files and automatically compresses them using HandBrake CLI.
 
 Perfect for screen recordings, video clips, and other videos that need to be optimized for web upload.
 
 ## Features
 
-- 🎬 Automatically watches `~/Desktop` for new `.mov` files
+- 🎬 Automatically watches `~/Desktop` for new video files (`.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`, `.webm`, `.flv`, `.wmv`)
 - 🗜️ Compresses videos using HandBrake CLI with web-optimized settings
 - 🔔 Sends cross-platform desktop notifications when compression starts and finishes
 - ✅ Checks for HandBrake CLI availability on startup
@@ -51,11 +51,11 @@ You'll receive a notification when the service starts watching your Desktop.
 
 Once installed, the service runs automatically in the background. Simply:
 
-1. Save or move a `.mov` file to your Desktop
+1. Save or move a video file to your Desktop (supports `.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`, `.webm`, `.flv`, `.wmv`)
 2. The service will detect it and start compression
 3. You'll receive a notification when compression starts
 4. When complete, you'll get a notification with compression statistics
-5. The compressed file will be saved as `[original_name]_compressed.mov`
+5. The compressed file will be saved as `[original_name]_compressed.[extension]`
 
 ### Example
 
@@ -137,7 +137,7 @@ Make sure Python has permission to send notifications in System Preferences → 
 2. The logs show "Notification sent" messages (check `~/Library/Logs/desktop-video-compress.log`)
 
 ### Files not being processed
-- Check that the file is a `.mov` file
+- Check that the file is a supported video format (`.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`, `.webm`, `.flv`, `.wmv`)
 - Check that the filename doesn't already contain `_compressed`
 - Check the logs for errors
 

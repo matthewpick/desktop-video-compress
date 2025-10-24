@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Desktop Video Compress - Automatic video compression for macOS
-Watches ~/Desktop for .mov files and compresses them using HandBrake CLI
+Watches ~/Desktop for video files and compresses them using HandBrake CLI
 """
 
 import os
@@ -35,6 +35,11 @@ HANDBRAKE_PATH = None
 
 # Global notifier instance for desktop notifications
 NOTIFIER = DesktopNotifier(app_name="Desktop Video Compress")
+
+# Supported video file extensions
+# Includes modern formats (mp4, m4v, mov, mkv, webm) and legacy formats (avi, flv, wmv)
+# to ensure compatibility with various recording and conversion tools
+SUPPORTED_VIDEO_EXTENSIONS = {'.mp4', '.m4v', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
 
 
 def find_handbrake_cli():
@@ -208,8 +213,8 @@ class DesktopVideoHandler(FileSystemEventHandler):
         
         file_path = Path(event.src_path)
         
-        # Only process .mov files
-        if file_path.suffix.lower() != '.mov':
+        # Only process supported video files
+        if file_path.suffix.lower() not in SUPPORTED_VIDEO_EXTENSIONS:
             return
         
         # Skip if already processing
@@ -236,8 +241,8 @@ class DesktopVideoHandler(FileSystemEventHandler):
         
         file_path = Path(event.src_path)
         
-        # Only process .mov files
-        if file_path.suffix.lower() != '.mov':
+        # Only process supported video files
+        if file_path.suffix.lower() not in SUPPORTED_VIDEO_EXTENSIONS:
             return
         
         # Skip if already processing or already compressed
@@ -261,10 +266,10 @@ def main():
         logger.error(f"Desktop path not found: {desktop_path}")
         sys.exit(1)
     
-    logger.info(f"Watching for .mov files in: {desktop_path}")
+    logger.info(f"Watching for video files in: {desktop_path}")
     send_notification(
         "Desktop Video Compress",
-        "Now watching Desktop for .mov files"
+        "Now watching Desktop for video files"
     )
     
     # Set up file watcher
