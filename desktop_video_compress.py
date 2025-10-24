@@ -37,6 +37,8 @@ HANDBRAKE_PATH = None
 NOTIFIER = DesktopNotifier(app_name="Desktop Video Compress")
 
 # Supported video file extensions
+# Includes modern formats (mp4, m4v, mov, mkv, webm) and legacy formats (avi, flv, wmv)
+# to ensure compatibility with various recording and conversion tools
 SUPPORTED_VIDEO_EXTENSIONS = {'.mp4', '.m4v', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
 
 
