@@ -13,12 +13,16 @@ from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+# Ensure log directory exists
+log_dir = os.path.expanduser('~/Library/Logs')
+os.makedirs(log_dir, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(os.path.expanduser('~/Library/Logs/desktop-video-compress.log')),
+        logging.FileHandler(os.path.join(log_dir, 'desktop-video-compress.log')),
         logging.StreamHandler()
     ]
 )
