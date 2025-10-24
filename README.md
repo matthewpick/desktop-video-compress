@@ -8,7 +8,7 @@ Perfect for screen recordings, video clips, and other videos that need to be opt
 
 - 🎬 Automatically watches `~/Desktop` for new `.mov` files
 - 🗜️ Compresses videos using HandBrake CLI with web-optimized settings
-- 🔔 Sends macOS notifications when compression starts and finishes
+- 🔔 Sends cross-platform desktop notifications when compression starts and finishes
 - ✅ Checks for HandBrake CLI availability on startup
 - 🚀 Runs automatically on login via LaunchAgent
 - 📊 Shows compression statistics (original size, compressed size, savings %)
@@ -40,7 +40,7 @@ Perfect for screen recordings, video clips, and other videos that need to be opt
    ```
 
 The installation script will:
-- Install Python dependencies (watchdog)
+- Install Python dependencies (watchdog, desktop-notifier)
 - Create a LaunchAgent to run the service automatically
 - Start the service immediately
 - Configure it to start on login
@@ -132,7 +132,7 @@ Check the logs in `~/Library/Logs/` for error messages.
 ### No notifications
 Make sure Python has permission to send notifications in System Preferences → Notifications.
 
-**Note:** When running as a LaunchAgent, the script uses `osascript` for notifications. If you're not seeing notifications, check that:
+**Note:** The script uses the `desktop-notifier` library for cross-platform notifications. If you're not seeing notifications, check that:
 1. The service has permission to send notifications (System Preferences → Notifications)
 2. The logs show "Notification sent" messages (check `~/Library/Logs/desktop-video-compress.log`)
 

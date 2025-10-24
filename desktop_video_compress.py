@@ -9,9 +9,11 @@ import sys
 import time
 import subprocess
 import logging
+import asyncio
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from desktop_notifier import DesktopNotifier
 
 # Ensure log directory exists
 log_dir = os.path.expanduser('~/Library/Logs')
@@ -30,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 # Global variable to store HandBrakeCLI path once found
 HANDBRAKE_PATH = None
+
+# Global notifier instance for desktop notifications
+NOTIFIER = DesktopNotifier(app_name="Desktop Video Compress")
 
 
 def find_handbrake_cli():
@@ -111,14 +116,9 @@ def check_handbrake_installed():
 
 
 def send_notification(title, message):
-    """Send a macOS notification using osascript."""
+    """Send a desktop notification using desktop-notifier."""
     try:
-        script = f'display notification "{message}" with title "{title}"'
-        subprocess.run(
-            ['osascript', '-e', script],
-            capture_output=True,
-            timeout=5
-        )
+        asyncio.run(NOTIFIER.send(title=title, message=message))
         logger.info(f"Notification sent: {title} - {message}")
     except Exception as e:
         logger.error(f"Failed to send notification: {e}")
