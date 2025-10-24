@@ -53,6 +53,11 @@ cat > "$PLIST_PATH" <<EOF
     <string>$HOME/Library/Logs/desktop-video-compress-stdout.log</string>
     <key>StandardErrorPath</key>
     <string>$HOME/Library/Logs/desktop-video-compress-stderr.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
 </dict>
 </plist>
 EOF

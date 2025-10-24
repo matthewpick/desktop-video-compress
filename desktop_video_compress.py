@@ -28,29 +28,79 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global variable to store HandBrakeCLI path once found
+HANDBRAKE_PATH = None
+
+
+def find_handbrake_cli():
+    """Find HandBrakeCLI in common locations.
+    
+    Returns the full path to HandBrakeCLI if found, None otherwise.
+    """
+    # Common executable names (case variations)
+    executable_names = ['HandBrakeCLI', 'handbrakecli']
+    
+    # Common installation paths (macOS Homebrew, Linux, etc.)
+    search_paths = [
+        '/opt/homebrew/bin',  # Apple Silicon Mac
+        '/usr/local/bin',      # Intel Mac, Linux
+        '/usr/bin',            # System-wide Linux
+    ]
+    
+    # First, try to find it in PATH
+    for exe_name in executable_names:
+        try:
+            result = subprocess.run(
+                ['which', exe_name],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                path = result.stdout.strip()
+                if os.path.isfile(path):
+                    return path
+        except Exception:
+            pass
+    
+    # Then check common installation paths
+    for search_path in search_paths:
+        for exe_name in executable_names:
+            full_path = os.path.join(search_path, exe_name)
+            if os.path.isfile(full_path):
+                return full_path
+    
+    return None
+
 
 def check_handbrake_installed():
     """Check if HandBrake CLI is installed and available."""
+    global HANDBRAKE_PATH
+    
+    HANDBRAKE_PATH = find_handbrake_cli()
+    
+    if HANDBRAKE_PATH is None:
+        logger.error("HandBrake CLI not found in PATH or common locations")
+        logger.error("Searched locations: /opt/homebrew/bin, /usr/local/bin, /usr/bin")
+        send_notification(
+            "Desktop Video Compress - Error",
+            "HandBrake CLI is not installed. Please install it using: brew install handbrake"
+        )
+        return False
+    
     try:
         result = subprocess.run(
-            ['HandBrakeCLI', '--version'],
+            [HANDBRAKE_PATH, '--version'],
             capture_output=True,
             text=True,
             timeout=5
         )
         if result.returncode == 0:
             version_info = result.stdout.split('\n')[0]
-            logger.info(f"HandBrake CLI found: {version_info}")
+            logger.info(f"HandBrake CLI found at {HANDBRAKE_PATH}: {version_info}")
             return True
-    except FileNotFoundError:
-        logger.error("HandBrake CLI not found in PATH")
-        send_notification(
-            "Desktop Video Compress - Error",
-            "HandBrake CLI is not installed. Please install it using: brew install handbrake"
-        )
-        return False
     except Exception as e:
-        logger.error(f"Error checking HandBrake: {e}")
+        logger.error(f"Error checking HandBrake at {HANDBRAKE_PATH}: {e}")
         send_notification(
             "Desktop Video Compress - Error",
             f"Error checking HandBrake: {e}"
@@ -106,7 +156,7 @@ def compress_video(input_path):
         # HandBrake CLI command for web-optimized compression
         # Using fast preset with web optimization
         cmd = [
-            'HandBrakeCLI',
+            HANDBRAKE_PATH,
             '-i', str(input_path),
             '-o', str(output_path),
             '--preset', 'Fast 1080p30',

@@ -119,11 +119,22 @@ If you get an error that HandBrake is not installed:
 brew install handbrake
 ```
 
+The service automatically searches for HandBrake in common locations:
+- `/opt/homebrew/bin/handbrakecli` (Apple Silicon Mac)
+- `/usr/local/bin/handbrakecli` (Intel Mac)
+- `/usr/bin/handbrakecli` (Linux)
+
+It checks for both `HandBrakeCLI` and `handbrakecli` executable names.
+
 ### Service not starting
 Check the logs in `~/Library/Logs/` for error messages.
 
 ### No notifications
 Make sure Python has permission to send notifications in System Preferences → Notifications.
+
+**Note:** When running as a LaunchAgent, the script uses `osascript` for notifications. If you're not seeing notifications, check that:
+1. The service has permission to send notifications (System Preferences → Notifications)
+2. The logs show "Notification sent" messages (check `~/Library/Logs/desktop-video-compress.log`)
 
 ### Files not being processed
 - Check that the file is a `.mov` file
