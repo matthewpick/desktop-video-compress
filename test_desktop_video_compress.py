@@ -14,11 +14,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler
 
 def test_handbrake_check():
-    """Test HandBrake availability check."""
+    """Test HandBrake availability check.
+    
+    Note: This test assumes HandBrake is NOT installed in the test environment.
+    In a production test suite, this should be mocked for consistent results.
+    """
     print("Test 1: HandBrake availability check")
     result = check_handbrake_installed()
-    print(f"  Result: {'PASS' if result == False else 'FAIL'} (HandBrake not installed in test env)")
-    return True
+    # In this test environment, HandBrake is not installed, so we expect False
+    expected = False
+    passed = result == expected
+    print(f"  Result: {'PASS' if passed else 'FAIL'} (Expected: {expected}, Got: {result})")
+    return passed
 
 def test_notification():
     """Test notification function."""
