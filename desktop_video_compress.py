@@ -49,7 +49,7 @@ VIDEO_OUTPUT_FORMAT = os.environ.get('VIDEO_OUTPUT_FORMAT', '4K').strip().upper(
 # Map output format to HandBrake preset
 OUTPUT_FORMAT_PRESETS = {
     '1080P': 'Fast 1080p30',
-    '4K': 'Fast 2160p60',
+    '4K': 'Fast 2160p30',
 }
 
 # Validate and set the preset
