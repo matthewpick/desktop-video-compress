@@ -133,7 +133,7 @@ def test_preset_mapping():
     try:
         expected_mappings = {
             '1080P': 'Fast 1080p30',
-            '4K': 'Fast 2160p60',
+            '4K': 'Fast 2160p30',
         }
         
         all_passed = True
