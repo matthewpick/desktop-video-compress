@@ -11,7 +11,7 @@ from pathlib import Path
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler, find_handbrake_cli, SUPPORTED_VIDEO_EXTENSIONS
+from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler, find_handbrake_cli, SUPPORTED_VIDEO_EXTENSIONS, VIDEO_OUTPUT_FORMAT, HANDBRAKE_PRESET, OUTPUT_FORMAT_PRESETS
 
 def test_handbrake_check():
     """Test HandBrake availability check.
@@ -99,6 +99,60 @@ def test_file_filtering():
         print(f"  Result: FAIL ({e})")
         return False
 
+def test_output_format_configuration():
+    """Test video output format configuration."""
+    print("\nTest 6: Video output format configuration")
+    try:
+        # Test that VIDEO_OUTPUT_FORMAT is set
+        print(f"  Current VIDEO_OUTPUT_FORMAT: {VIDEO_OUTPUT_FORMAT}")
+        
+        # Test that HANDBRAKE_PRESET is set
+        print(f"  Current HANDBRAKE_PRESET: {HANDBRAKE_PRESET}")
+        
+        # Test that the preset is valid
+        if VIDEO_OUTPUT_FORMAT not in OUTPUT_FORMAT_PRESETS:
+            print(f"  ✗ VIDEO_OUTPUT_FORMAT '{VIDEO_OUTPUT_FORMAT}' not in OUTPUT_FORMAT_PRESETS")
+            return False
+        
+        expected_preset = OUTPUT_FORMAT_PRESETS[VIDEO_OUTPUT_FORMAT]
+        if HANDBRAKE_PRESET != expected_preset:
+            print(f"  ✗ HANDBRAKE_PRESET mismatch: expected '{expected_preset}', got '{HANDBRAKE_PRESET}'")
+            return False
+        
+        print(f"  ✓ Configuration is valid")
+        print(f"  ✓ Preset mapping: {VIDEO_OUTPUT_FORMAT} → {HANDBRAKE_PRESET}")
+        print(f"  Result: PASS")
+        return True
+    except Exception as e:
+        print(f"  Result: FAIL ({e})")
+        return False
+
+def test_preset_mapping():
+    """Test that preset mapping contains expected values."""
+    print("\nTest 7: Preset mapping validation")
+    try:
+        expected_mappings = {
+            '1080P': 'Fast 1080p30',
+            '4K': 'Fast 2160p60',
+        }
+        
+        all_passed = True
+        for format_key, expected_preset in expected_mappings.items():
+            if format_key not in OUTPUT_FORMAT_PRESETS:
+                print(f"  ✗ Missing format: {format_key}")
+                all_passed = False
+            elif OUTPUT_FORMAT_PRESETS[format_key] != expected_preset:
+                print(f"  ✗ {format_key}: expected '{expected_preset}', got '{OUTPUT_FORMAT_PRESETS[format_key]}'")
+                all_passed = False
+            else:
+                print(f"  ✓ {format_key} → {expected_preset}")
+        
+        print(f"  Result: {'PASS' if all_passed else 'FAIL'}")
+        return all_passed
+    except Exception as e:
+        print(f"  Result: FAIL ({e})")
+        return False
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -111,6 +165,8 @@ def main():
         test_notification,
         test_handler_creation,
         test_file_filtering,
+        test_output_format_configuration,
+        test_preset_mapping,
     ]
     
     results = []

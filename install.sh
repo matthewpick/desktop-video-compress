@@ -57,6 +57,8 @@ cat > "$PLIST_PATH" <<EOF
     <dict>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>VIDEO_OUTPUT_FORMAT</key>
+        <string>4K</string>
     </dict>
 </dict>
 </plist>

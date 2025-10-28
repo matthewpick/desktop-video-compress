@@ -41,6 +41,24 @@ NOTIFIER = DesktopNotifier(app_name="Desktop Video Compress")
 # to ensure compatibility with various recording and conversion tools
 SUPPORTED_VIDEO_EXTENSIONS = {'.mp4', '.m4v', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv'}
 
+# Video output format configuration
+# Read from environment variable VIDEO_OUTPUT_FORMAT, default to '4K'
+# Supported values: '1080p', '4K'
+VIDEO_OUTPUT_FORMAT = os.environ.get('VIDEO_OUTPUT_FORMAT', '4K').upper()
+
+# Map output format to HandBrake preset
+OUTPUT_FORMAT_PRESETS = {
+    '1080P': 'Fast 1080p30',
+    '4K': 'Fast 2160p60',
+}
+
+# Validate and set the preset
+if VIDEO_OUTPUT_FORMAT not in OUTPUT_FORMAT_PRESETS:
+    logger.warning(f"Invalid VIDEO_OUTPUT_FORMAT '{VIDEO_OUTPUT_FORMAT}', defaulting to '4K'")
+    VIDEO_OUTPUT_FORMAT = '4K'
+
+HANDBRAKE_PRESET = OUTPUT_FORMAT_PRESETS[VIDEO_OUTPUT_FORMAT]
+
 
 def find_handbrake_cli():
     """Find HandBrakeCLI in common locations.
@@ -159,12 +177,12 @@ def compress_video(input_path):
     
     try:
         # HandBrake CLI command for web-optimized compression
-        # Using fast preset with web optimization
+        # Using configurable preset based on VIDEO_OUTPUT_FORMAT environment variable
         cmd = [
             HANDBRAKE_PATH,
             '-i', str(input_path),
             '-o', str(output_path),
-            '--preset', 'Fast 1080p30',
+            '--preset', HANDBRAKE_PRESET,
             '--optimize',
             '--encoder', 'x264',
             '--quality', '22'
@@ -253,6 +271,7 @@ class DesktopVideoHandler(FileSystemEventHandler):
 def main():
     """Main function to start the desktop video watcher."""
     logger.info("Starting Desktop Video Compress")
+    logger.info(f"Video output format: {VIDEO_OUTPUT_FORMAT} (using preset: {HANDBRAKE_PRESET})")
     
     # Check if HandBrake is installed
     if not check_handbrake_installed():

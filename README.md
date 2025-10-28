@@ -66,12 +66,52 @@ If you save `screen_recording.mov` to your Desktop:
 
 ## Configuration
 
-The service uses HandBrake's "Fast 1080p30" preset with the following settings:
+The service supports configurable video output formats through the `VIDEO_OUTPUT_FORMAT` environment variable.
+
+### Output Format Options
+
+- **4K** (default): Uses HandBrake's "Fast 2160p60" preset for 4K output
+- **1080p**: Uses HandBrake's "Fast 1080p30" preset for Full HD output
+
+Both presets use the following settings:
 - H.264 encoder (x264)
 - Quality: 22 (good balance between size and quality)
 - Web optimized for faster streaming
 
-To modify compression settings, edit `desktop_video_compress.py` and adjust the HandBrake command parameters.
+### Changing the Output Format
+
+To change from the default 4K to 1080p:
+
+1. Edit the LaunchAgent plist file:
+   ```bash
+   nano ~/Library/LaunchAgents/com.desktop.video.compress.plist
+   ```
+
+2. Modify the `VIDEO_OUTPUT_FORMAT` value in the `EnvironmentVariables` section:
+   ```xml
+   <key>VIDEO_OUTPUT_FORMAT</key>
+   <string>1080p</string>
+   ```
+
+3. Restart the service:
+   ```bash
+   launchctl unload ~/Library/LaunchAgents/com.desktop.video.compress.plist
+   launchctl load ~/Library/LaunchAgents/com.desktop.video.compress.plist
+   ```
+
+### Manual Execution
+
+When running the script manually, you can set the output format using an environment variable:
+
+```bash
+# Use 4K output (default)
+python3 desktop_video_compress.py
+
+# Use 1080p output
+VIDEO_OUTPUT_FORMAT=1080p python3 desktop_video_compress.py
+```
+
+To further customize compression settings, edit `desktop_video_compress.py` and adjust the HandBrake command parameters.
 
 ## Logs
 
