@@ -70,7 +70,7 @@ The service supports configurable video output formats through the `VIDEO_OUTPUT
 
 ### Output Format Options
 
-- **4K** (default): Uses HandBrake's "Fast 2160p60" preset for 4K output
+- **4K** (default): Uses HandBrake's "Fast 2160p30" preset for 4K output
 - **1080p**: Uses HandBrake's "Fast 1080p30" preset for Full HD output
 
 Both presets use the following settings:
