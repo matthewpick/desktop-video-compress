@@ -44,11 +44,7 @@ SUPPORTED_VIDEO_EXTENSIONS = {'.mp4', '.m4v', '.mov', '.avi', '.mkv', '.webm', '
 # Video output format configuration
 # Read from environment variable VIDEO_OUTPUT_FORMAT, default to '4K'
 # Supported values: '1080p', '4K'
-VIDEO_OUTPUT_FORMAT = os.environ.get('VIDEO_OUTPUT_FORMAT', '4K').strip().upper()
-
-# Handle empty string
-if not VIDEO_OUTPUT_FORMAT:
-    VIDEO_OUTPUT_FORMAT = '4K'
+VIDEO_OUTPUT_FORMAT = os.environ.get('VIDEO_OUTPUT_FORMAT', '4K').strip().upper() or '4K'
 
 # Map output format to HandBrake preset
 OUTPUT_FORMAT_PRESETS = {
