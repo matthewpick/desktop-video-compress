@@ -10,6 +10,7 @@ import time
 import subprocess
 import logging
 import asyncio
+import shlex
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -146,10 +147,12 @@ def move_to_trash(file_path):
         
         # Use osascript to move file to Trash (macOS)
         # This is the proper way to trash files on macOS, preserving the ability to undo
+        # Use shlex.quote to safely escape the file path to prevent command injection
+        safe_path = shlex.quote(str(file_path.absolute()))
         cmd = [
             'osascript',
             '-e',
-            f'tell application "Finder" to delete POSIX file "{file_path.absolute()}"'
+            f'tell application "Finder" to delete POSIX file {safe_path}'
         ]
         
         result = subprocess.run(
