@@ -10,6 +10,7 @@ import time
 import subprocess
 import logging
 import asyncio
+import tempfile
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -84,6 +85,59 @@ def find_handbrake_cli():
     return None
 
 
+def check_trash_permissions():
+    """Check if the script has permission to move files to trash.
+    
+    Returns:
+        True if permissions appear to be OK, False if there's a known issue
+    """
+    tmp_path = None
+    try:
+        # Create a temporary test file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            tmp_file.write("test")
+        
+        # Try to move it to trash
+        try:
+            send2trash(str(tmp_path))
+            logger.info("Trash permissions check: OK")
+            return True
+        except OSError as e:
+            if "Operation not permitted" in str(e) or "Insufficient access" in str(e):
+                logger.warning("=" * 60)
+                logger.warning("WARNING: Python does not have permission to move files to trash")
+                logger.warning("On macOS, this requires Full Disk Access permission")
+                logger.warning("To fix:")
+                logger.warning("  1. Open System Settings > Privacy & Security > Full Disk Access")
+                logger.warning(f"  2. Click '+' and add: {sys.executable}")
+                logger.warning("  3. Restart this service after granting permission")
+                logger.warning("=" * 60)
+                send_notification(
+                    "Desktop Video Compress - Setup Required",
+                    "Python needs Full Disk Access permission. Check logs for details."
+                )
+                return False
+            else:
+                # Unknown error, but log and continue
+                logger.warning(f"Trash permission check encountered error: {e}")
+                return True
+        except Exception as e:
+            # Log and continue
+            logger.warning(f"Trash permission check failed: {e}")
+            return True
+    except Exception as e:
+        logger.warning(f"Could not perform trash permission check: {e}")
+        return True
+    finally:
+        # Always clean up test file if it exists
+        if tmp_path and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except (FileNotFoundError, PermissionError):
+                pass  # Ignore expected cleanup errors
+
+
 def check_handbrake_installed():
     """Check if HandBrake CLI is installed and available."""
     global HANDBRAKE_PATH
@@ -151,6 +205,20 @@ def move_to_trash(file_path):
         logger.info(f"Moved to trash: {file_path}")
         return True
             
+    except OSError as e:
+        # Handle permission errors specifically (common on macOS with LaunchAgents)
+        if "Operation not permitted" in str(e) or "Insufficient access" in str(e):
+            logger.error(f"Permission denied moving file to trash: {file_path}")
+            logger.error("This usually means Python needs Full Disk Access permission on macOS.")
+            logger.error("To fix: Go to System Settings > Privacy & Security > Full Disk Access")
+            logger.error(f"Add Python executable: {sys.executable}")
+            send_notification(
+                "Desktop Video Compress - Permission Error",
+                "Python needs Full Disk Access to move files to trash. Check the logs for instructions."
+            )
+        else:
+            logger.error(f"Error moving file to trash: {e}")
+        return False
     except Exception as e:
         logger.error(f"Error moving file to trash: {e}")
         return False
@@ -291,6 +359,9 @@ def main():
     if not check_handbrake_installed():
         logger.error("Exiting: HandBrake CLI is not available")
         sys.exit(1)
+    
+    # Check trash permissions (warning only, don't exit)
+    check_trash_permissions()
     
     # Get Desktop path
     desktop_path = os.path.expanduser('~/Desktop')

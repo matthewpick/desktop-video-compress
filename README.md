@@ -26,6 +26,11 @@ Perfect for screen recordings, video clips, and other videos that need to be opt
    brew install handbrake
    ```
 
+3. **Full Disk Access** (macOS only) - Required for moving files to trash:
+   - Open **System Settings** > **Privacy & Security** > **Full Disk Access**
+   - Click the **+** button and add your Python executable (usually `/usr/bin/python3` or `/opt/homebrew/bin/python3`)
+   - The service will detect and warn you if this permission is missing
+
 ## Installation
 
 1. Clone this repository:
@@ -117,6 +122,30 @@ launchctl load ~/Library/LaunchAgents/com.desktop.video.compress.plist
 ```
 
 ## Troubleshooting
+
+### "Insufficient access privileges" Error
+If you see the error "Insufficient access privileges for operation" when the service tries to move files to trash, this means Python needs Full Disk Access permission on macOS.
+
+**To fix:**
+1. Open **System Settings** > **Privacy & Security** > **Full Disk Access**
+2. Click the **+** button
+3. Navigate to and select your Python executable:
+   - Apple Silicon Mac: Usually `/opt/homebrew/bin/python3`
+   - Intel Mac: Usually `/usr/local/bin/python3`
+   - System Python: `/usr/bin/python3`
+4. Toggle the switch to enable Full Disk Access
+5. Restart the service:
+   ```bash
+   launchctl unload ~/Library/LaunchAgents/com.desktop.video.compress.plist
+   launchctl load ~/Library/LaunchAgents/com.desktop.video.compress.plist
+   ```
+
+You can find your Python path by running:
+```bash
+which python3
+```
+
+The service will automatically check for this permission on startup and warn you in the logs if it's missing.
 
 ### HandBrake not found
 If you get an error that HandBrake is not installed:
