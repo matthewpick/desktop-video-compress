@@ -11,7 +11,7 @@ from pathlib import Path
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler, find_handbrake_cli, SUPPORTED_VIDEO_EXTENSIONS, move_to_trash
+from desktop_video_compress import check_handbrake_installed, send_notification, DesktopVideoHandler, find_handbrake_cli, SUPPORTED_VIDEO_EXTENSIONS, move_to_trash, check_trash_permissions
 
 def test_handbrake_check():
     """Test HandBrake availability check.
@@ -148,6 +148,18 @@ def test_move_to_trash():
             pass
         return False
 
+def test_trash_permissions_check():
+    """Test trash permissions check function."""
+    print("\nTest 7: Trash permissions check")
+    try:
+        result = check_trash_permissions()
+        # Result depends on actual permissions, but function should execute without error
+        print(f"  Result: PASS (function executed, permissions {'OK' if result else 'need attention'})")
+        return True
+    except Exception as e:
+        print(f"  Result: FAIL ({e})")
+        return False
+
 def main():
     """Run all tests."""
     print("=" * 60)
@@ -161,6 +173,7 @@ def main():
         test_handler_creation,
         test_file_filtering,
         test_move_to_trash,
+        test_trash_permissions_check,
     ]
     
     results = []
