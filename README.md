@@ -56,6 +56,7 @@ Once installed, the service runs automatically in the background. Simply:
 3. You'll receive a notification when compression starts
 4. When complete, you'll get a notification with compression statistics
 5. The compressed file will be saved as `[original_name]_compressed.[extension]`
+6. The original file will be automatically moved to the Trash
 
 ### Example
 
@@ -63,13 +64,17 @@ If you save `screen_recording.mov` to your Desktop:
 - Original file: `screen_recording.mov` (100 MB)
 - Compressed file: `screen_recording_compressed.mov` (25 MB)
 - You'll get a notification: "Original: 100.0MB → Compressed: 25.0MB (75.0% savings)"
+- Original file is moved to Trash automatically
 
 ## Configuration
 
-The service uses HandBrake's "Fast 1080p30" preset with the following settings:
-- H.264 encoder (x264)
+The service uses HandBrake's "H.265 MKV 2160p60" preset with the following settings:
+- H.265 encoder (x265) for better compression
 - Quality: 22 (good balance between size and quality)
+- 4K 60fps profile for high-quality content
 - Web optimized for faster streaming
+
+After compression, the original file is automatically moved to the Trash. You can restore it from the Trash if needed.
 
 To modify compression settings, edit `desktop_video_compress.py` and adjust the HandBrake command parameters.
 

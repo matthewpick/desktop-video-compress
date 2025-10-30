@@ -10,6 +10,7 @@ import time
 import subprocess
 import logging
 import asyncio
+import shlex
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -129,6 +130,50 @@ def send_notification(title, message):
         logger.error(f"Failed to send notification: {e}")
 
 
+def move_to_trash(file_path):
+    """Move file to macOS Trash using osascript.
+    
+    Args:
+        file_path: Path object or string path to the file to trash
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        file_path = Path(file_path)
+        if not file_path.exists():
+            logger.warning(f"Cannot move to trash - file not found: {file_path}")
+            return False
+        
+        # Use osascript to move file to Trash (macOS)
+        # This is the proper way to trash files on macOS, preserving the ability to undo
+        # Use shlex.quote to safely escape the file path to prevent command injection
+        safe_path = shlex.quote(str(file_path.absolute()))
+        cmd = [
+            'osascript',
+            '-e',
+            f'tell application "Finder" to delete POSIX file {safe_path}'
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            logger.info(f"Moved to trash: {file_path}")
+            return True
+        else:
+            logger.error(f"Failed to move to trash: {result.stderr}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error moving file to trash: {e}")
+        return False
+
+
 def compress_video(input_path):
     """Compress video file using HandBrake CLI."""
     input_path = Path(input_path)
@@ -159,14 +204,14 @@ def compress_video(input_path):
     
     try:
         # HandBrake CLI command for web-optimized compression
-        # Using fast preset with web optimization
+        # Using H.265 MKV 2160p60 preset for 4K 60fps content
         cmd = [
             HANDBRAKE_PATH,
             '-i', str(input_path),
             '-o', str(output_path),
-            '--preset', 'Fast 1080p30',
+            '--preset', 'H.265 MKV 2160p60',
             '--optimize',
-            '--encoder', 'x264',
+            '--encoder', 'x265',
             '--quality', '22'
         ]
         
@@ -186,6 +231,12 @@ def compress_video(input_path):
             message = f"Compressed {input_path.name}\nOriginal: {original_size:.1f}MB → Compressed: {compressed_size:.1f}MB ({savings:.1f}% savings)"
             logger.info(message)
             send_notification("Desktop Video Compress - Complete", message)
+            
+            # Move original file to Trash
+            if move_to_trash(input_path):
+                logger.info(f"Original file moved to Trash: {input_path}")
+            else:
+                logger.warning(f"Failed to move original file to Trash: {input_path}")
         else:
             error_msg = f"Compression failed: {result.stderr}"
             logger.error(error_msg)
