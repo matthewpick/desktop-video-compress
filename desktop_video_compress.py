@@ -204,12 +204,12 @@ def compress_video(input_path):
     
     try:
         # HandBrake CLI command for web-optimized compression
-        # Using H.265 MKV 2160p60 preset for 4K 60fps content
+        # Using Fast 2160p60 4K HEVC preset for 4K 60fps content
         cmd = [
             HANDBRAKE_PATH,
             '-i', str(input_path),
             '-o', str(output_path),
-            '--preset', 'H.265 MKV 2160p60',
+            '--preset', 'Fast 2160p60 4K HEVC',
             '--optimize',
             '--encoder', 'x265',
             '--quality', '22'
