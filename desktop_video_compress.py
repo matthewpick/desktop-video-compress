@@ -134,8 +134,8 @@ def check_trash_permissions():
         if tmp_path and tmp_path.exists():
             try:
                 tmp_path.unlink()
-            except Exception:
-                pass  # Ignore cleanup errors
+            except (FileNotFoundError, PermissionError):
+                pass  # Ignore expected cleanup errors
 
 
 def check_handbrake_installed():
