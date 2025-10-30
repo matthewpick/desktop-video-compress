@@ -10,11 +10,11 @@ import time
 import subprocess
 import logging
 import asyncio
-import shlex
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from desktop_notifier import DesktopNotifier
+from send2trash import send2trash
 
 # Ensure log directory exists
 log_dir = os.path.expanduser('~/Library/Logs')
@@ -131,7 +131,7 @@ def send_notification(title, message):
 
 
 def move_to_trash(file_path):
-    """Move file to macOS Trash using osascript.
+    """Move file to trash using Send2Trash.
     
     Args:
         file_path: Path object or string path to the file to trash
@@ -145,29 +145,11 @@ def move_to_trash(file_path):
             logger.warning(f"Cannot move to trash - file not found: {file_path}")
             return False
         
-        # Use osascript to move file to Trash (macOS)
-        # This is the proper way to trash files on macOS, preserving the ability to undo
-        # Use shlex.quote to safely escape the file path to prevent command injection
-        safe_path = shlex.quote(str(file_path.absolute()))
-        cmd = [
-            'osascript',
-            '-e',
-            f'tell application "Finder" to delete POSIX file {safe_path}'
-        ]
-        
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode == 0:
-            logger.info(f"Moved to trash: {file_path}")
-            return True
-        else:
-            logger.error(f"Failed to move to trash: {result.stderr}")
-            return False
+        # Use Send2Trash to move file to trash
+        # This is cross-platform and preserves the ability to restore files
+        send2trash(str(file_path))
+        logger.info(f"Moved to trash: {file_path}")
+        return True
             
     except Exception as e:
         logger.error(f"Error moving file to trash: {e}")
