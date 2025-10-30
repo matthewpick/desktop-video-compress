@@ -91,9 +91,9 @@ def check_trash_permissions():
     Returns:
         True if permissions appear to be OK, False if there's a known issue
     """
+    tmp_path = None
     try:
         # Create a temporary test file
-        import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp_file:
             tmp_path = Path(tmp_file.name)
             tmp_file.write("test")
@@ -117,25 +117,25 @@ def check_trash_permissions():
                     "Desktop Video Compress - Setup Required",
                     "Python needs Full Disk Access permission. Check logs for details."
                 )
-                # Clean up test file if it still exists
-                if tmp_path.exists():
-                    tmp_path.unlink()
                 return False
             else:
-                # Unknown error, but clean up and continue
-                if tmp_path.exists():
-                    tmp_path.unlink()
+                # Unknown error, but log and continue
                 logger.warning(f"Trash permission check encountered error: {e}")
                 return True
         except Exception as e:
-            # Clean up and continue
-            if tmp_path.exists():
-                tmp_path.unlink()
+            # Log and continue
             logger.warning(f"Trash permission check failed: {e}")
             return True
     except Exception as e:
         logger.warning(f"Could not perform trash permission check: {e}")
         return True
+    finally:
+        # Always clean up test file if it exists
+        if tmp_path and tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass  # Ignore cleanup errors
 
 
 def check_handbrake_installed():
