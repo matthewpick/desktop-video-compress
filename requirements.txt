@@ -1,2 +1,3 @@
 watchdog>=3.0.0
 desktop-notifier>=6.0.0
+Send2Trash>=1.8.0
