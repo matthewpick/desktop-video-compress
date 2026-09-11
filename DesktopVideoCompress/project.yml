@@ -1,0 +1,89 @@
+name: DesktopVideoCompress
+options:
+  bundleIdPrefix: com.desktopvideocompress
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CLANG_CXX_LANGUAGE_STANDARD: "gnu++20"
+    GCC_C_LANGUAGE_STANDARD: gnu17
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+
+targets:
+  DesktopVideoCompress:
+    type: application
+    platform: macOS
+    sources:
+      - path: DesktopVideoCompress
+    entitlements:
+      path: DesktopVideoCompress/DesktopVideoCompress.entitlements
+      properties:
+        # Sandbox stays off. The app needs to watch an arbitrary user-chosen
+        # folder (Desktop by default), move originals to the Trash, and write
+        # alongside the source file. Under the sandbox all of that requires
+        # security-scoped bookmarks re-granted through an open panel, which is
+        # the wrong trade for a Developer ID-distributed background utility.
+        # Desktop access is granted through the TCC prompt driven by
+        # NSDesktopFolderUsageDescription below.
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        PRODUCT_NAME: "Desktop Video Compress"
+        # Without this the module name is derived from PRODUCT_NAME, giving
+        # tests an awkward `@testable import Desktop_Video_Compress`.
+        PRODUCT_MODULE_NAME: DesktopVideoCompress
+        PRODUCT_BUNDLE_IDENTIFIER: com.desktopvideocompress.DesktopVideoCompress
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: "Desktop Video Compress"
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSDesktopFolderUsageDescription: "Desktop Video Compress watches your Desktop for new video files so it can compress them automatically."
+        INFOPLIST_KEY_NSDocumentsFolderUsageDescription: "Desktop Video Compress needs access to compress video files in this folder."
+        INFOPLIST_KEY_NSDownloadsFolderUsageDescription: "Desktop Video Compress needs access to compress video files in this folder."
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+        # Deliberately NOT setting SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor:
+        # the encoding pipeline is the core of this app and runs off the main
+        # actor. UI types are annotated @MainActor explicitly instead.
+
+  DesktopVideoCompressTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - DesktopVideoCompressTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.desktopvideocompress.DesktopVideoCompressTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Desktop Video Compress.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Desktop Video Compress"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+    dependencies:
+      - target: DesktopVideoCompress
+
+schemes:
+  DesktopVideoCompress:
+    build:
+      targets:
+        DesktopVideoCompress: all
+        DesktopVideoCompressTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - DesktopVideoCompressTests
+    profile:
+      config: Release
+    archive:
+      config: Release

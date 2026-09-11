@@ -1,154 +1,140 @@
 # Desktop Video Compress
 
-Automatic Desktop Video Compression for macOS - A lightweight background service that watches your Desktop for video files and automatically compresses them using HandBrake CLI.
+A native macOS menu bar app that watches your Desktop and automatically compresses any video that lands there.
 
-Perfect for screen recordings, video clips, and other videos that need to be optimized for web upload.
+Drop in a screen recording, get back a much smaller HEVC `.mp4`. The original goes to the Trash, so your Desktop doesn't fill up with both copies.
+
+No Homebrew packages, no Python, no HandBrake — everything runs through AVFoundation and the hardware video encoder built into your Mac.
 
 ## Features
 
-- 🎬 Automatically watches `~/Desktop` for new video files (`.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`, `.webm`, `.flv`, `.wmv`)
-- 🗜️ Compresses videos using HandBrake CLI with web-optimized settings
-- 🔔 Sends cross-platform desktop notifications when compression starts and finishes
-- ✅ Checks for HandBrake CLI availability on startup
-- 🚀 Runs automatically on login via LaunchAgent
-- 📊 Shows compression statistics (original size, compressed size, savings %)
-- 📝 Maintains logs in `~/Library/Logs/`
+- 🎬 Watches `~/Desktop` (or any folder you pick) for new videos
+- 🗜️ Re-encodes to HEVC using the hardware encoder, in a web-optimized (faststart) `.mp4`
+- ⏳ Waits for the file to finish being written — a 20-minute screen recording is only touched once it's done
+- 🔔 Notifications on start and finish, with **Show in Finder** and **Undo** actions
+- 📊 Menu bar shows live progress and recent activity with before/after sizes
+- ↩️ One-click undo restores the original from the Trash
+- 🛡️ Never makes a file bigger, and leaves already-efficient videos alone
+- 🚀 Launches at login via `SMAppService`
 
-## Prerequisites
+## Requirements
 
-1. **Python 3** - Usually pre-installed on macOS, or install via:
-   ```bash
-   brew install python3
-   ```
-
-2. **HandBrake CLI** - Required for video compression:
-   ```bash
-   brew install handbrake
-   ```
+macOS 14 (Sonoma) or later. Apple Silicon and Intel are both supported.
 
 ## Installation
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/matthewpick/desktop-video-compress.git
-   cd desktop-video-compress
-   ```
+```bash
+brew install --cask matthewpick/desktop-video-compress/desktop-video-compress
+```
 
-2. Run the installation script:
-   ```bash
-   ./install.sh
-   ```
+Or download the `.dmg` from [Releases](https://github.com/matthewpick/desktop-video-compress/releases/latest), open it, and drag the app to Applications.
 
-The installation script will:
-- Install Python dependencies (watchdog, desktop-notifier)
-- Create a LaunchAgent to run the service automatically
-- Start the service immediately
-- Configure it to start on login
+The app is signed with a Developer ID certificate and notarized by Apple, so it opens without a Gatekeeper warning.
 
-You'll receive a notification when the service starts watching your Desktop.
+### First launch
+
+macOS will ask for permission to access your Desktop. Grant it — without it the app can't see the files it's meant to compress. You can change this later in **System Settings › Privacy & Security › Files and Folders**.
+
+The app also asks to send notifications, and enables **Launch at login** for you. Both are togglable in Settings.
 
 ## Usage
 
-Once installed, the service runs automatically in the background. Simply:
+Save or move a video to your Desktop. That's it.
 
-1. Save or move a video file to your Desktop (supports `.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`, `.webm`, `.flv`, `.wmv`)
-2. The service will detect it and start compression
-3. You'll receive a notification when compression starts
-4. When complete, you'll get a notification with compression statistics
-5. The compressed file will be saved as `[original_name]_compressed.[extension]`
-6. The original file will be automatically moved to the Trash
+1. The app notices the file and waits until it stops growing
+2. You get a "Compressing…" notification, and the menu bar icon shows progress
+3. When it finishes you get a notification like `12.4 MB → 3.1 MB (75% saved)`
+4. The compressed `.mp4` sits on your Desktop; the original moves to the Trash
 
-### Example
+Click the menu bar icon for progress, recent activity, **Pause Watching**, and **Compress File…** for a one-off.
 
-If you save `screen_recording.mov` to your Desktop:
-- Original file: `screen_recording.mov` (100 MB)
-- Compressed file: `screen_recording_compressed.mov` (25 MB)
-- You'll get a notification: "Original: 100.0MB → Compressed: 25.0MB (75.0% savings)"
-- Original file is moved to Trash automatically
+### Supported formats
 
-## Configuration
+`.mp4`, `.m4v`, and `.mov`.
 
-The service uses HandBrake's "H.265 MKV 2160p60" preset with the following settings:
-- H.265 encoder (x265) for better compression
-- Quality: 22 (good balance between size and quality)
-- 4K 60fps profile for high-quality content
-- Web optimized for faster streaming
+Other containers — `.mkv`, `.webm`, `.flv`, `.wmv`, `.avi` — are **ignored**. AVFoundation can't demux them, and this app deliberately has no external encoder dependency. The old Python version listed those extensions but would have failed on them anyway.
 
-After compression, the original file is automatically moved to the Trash. You can restore it from the Trash if needed.
+### Output naming
 
-To modify compression settings, edit `desktop_video_compress.py` and adjust the HandBrake command parameters.
+The output is `<name>.mp4` next to the source. If that name is already taken — which it always is when the source is itself a `.mp4` — it becomes `<name>_compressed.mp4`, then `<name>_compressed-2.mp4`, and so on.
+
+Output files are tagged with a `com.desktopvideocompress.processed` extended attribute so the app never re-compresses its own work, even if you rename the file.
+
+## Settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| Watched folder | `~/Desktop` | Any folder you like |
+| Compress files already in the folder at launch | Off | One pass over existing files on startup |
+| Quality | Balanced | `Smaller file` (0.7×), `Balanced` (1×), `Higher quality` (1.5×) bitrate |
+| Maximum size | Original | Optionally cap the longest edge at 4K / 1080p / 720p |
+| Move the original to the Trash | On | Turn off to keep both files |
+| Launch at login | On | Registered via `SMAppService` |
+| Show notifications | On | |
+
+### How the bitrate is chosen
+
+Target bitrate is `pixels × 30 × bits-per-pixel × (fps/30)^0.7 × quality multiplier`, where bits-per-pixel steps down as resolution rises (0.10 at 720p, 0.08 at 1080p, 0.065 at 1440p, 0.05 at 4K+). Frame rate scales sub-linearly because consecutive frames are more similar the faster you sample.
+
+Two guards apply:
+
+- **Already efficient** — a source that's already HEVC at or below the target bitrate (and doesn't need downscaling) is left completely alone.
+- **No worthwhile savings** — if the encode saves less than 5%, the output is discarded and the original stays put. The app will never hand you a bigger file.
 
 ## Logs
 
-Logs are stored in:
-- `~/Library/Logs/desktop-video-compress.log` - Main application log
-- `~/Library/Logs/desktop-video-compress-stdout.log` - Standard output
-- `~/Library/Logs/desktop-video-compress-stderr.log` - Standard error
+Everything goes to the unified log. To watch it live:
 
-## Uninstallation
+```bash
+log stream --predicate 'subsystem == "com.desktopvideocompress.DesktopVideoCompress"' --level info
+```
 
-To stop and remove the service:
+Or open Console.app and filter on `desktopvideocompress`.
+
+## Building from source
+
+Requires Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/xcodegen) (`brew install xcodegen`).
+
+```bash
+git clone https://github.com/matthewpick/desktop-video-compress.git
+cd desktop-video-compress
+
+make build       # Release build
+make install     # Build and copy to /Applications
+make test        # Run the test suite
+make dmg         # Build a distributable DMG
+```
+
+The `.xcodeproj` is generated from `DesktopVideoCompress/project.yml` and is not committed. Run `make generate` after a fresh clone or any change to the spec; the `build`/`test` targets do it for you.
+
+## Uninstalling
 
 ```bash
 ./uninstall.sh
 ```
 
-This will:
-- Stop the service
-- Remove the LaunchAgent
-- Keep the script files (in case you want to reinstall)
+Or `brew uninstall --cask desktop-video-compress`, then drag the app to the Trash. To also remove settings:
 
-## Manual Control
-
-### Start the service manually (for testing):
 ```bash
-python3 desktop_video_compress.py
+defaults delete com.desktopvideocompress.DesktopVideoCompress
 ```
 
-### Stop the service:
+## Migrating from the Python version
+
+Earlier releases of this project were a Python script installed as a LaunchAgent. That version is gone — it needed `watchdog`, `desktop-notifier`, `Send2Trash`, and a Homebrew install of HandBrake, and it exited on startup if HandBrake was missing.
+
+On first launch the app detects `~/Library/LaunchAgents/com.desktop.video.compress.plist` and offers to remove it. Accept — two services watching the same folder will fight over the same files. To do it by hand:
+
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.desktop.video.compress.plist
+launchctl bootout gui/$UID/com.desktop.video.compress
+rm ~/Library/LaunchAgents/com.desktop.video.compress.plist
 ```
 
-### Restart the service:
-```bash
-launchctl unload ~/Library/LaunchAgents/com.desktop.video.compress.plist
-launchctl load ~/Library/LaunchAgents/com.desktop.video.compress.plist
-```
-
-## Troubleshooting
-
-### HandBrake not found
-If you get an error that HandBrake is not installed:
-```bash
-brew install handbrake
-```
-
-The service automatically searches for HandBrake in common locations:
-- `/opt/homebrew/bin/handbrakecli` (Apple Silicon Mac)
-- `/usr/local/bin/handbrakecli` (Intel Mac)
-- `/usr/bin/handbrakecli` (Linux)
-
-It checks for both `HandBrakeCLI` and `handbrakecli` executable names.
-
-### Service not starting
-Check the logs in `~/Library/Logs/` for error messages.
-
-### No notifications
-Make sure Python has permission to send notifications in System Preferences → Notifications.
-
-**Note:** The script uses the `desktop-notifier` library for cross-platform notifications. If you're not seeing notifications, check that:
-1. The service has permission to send notifications (System Preferences → Notifications)
-2. The logs show "Notification sent" messages (check `~/Library/Logs/desktop-video-compress.log`)
-
-### Files not being processed
-- Check that the file is a supported video format (`.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`, `.webm`, `.flv`, `.wmv`)
-- Check that the filename doesn't already contain `_compressed`
-- Check the logs for errors
+Compression settings differ: the old version always used HandBrake's `Fast 2160p60 4K HEVC` preset at quality 22 regardless of the source. This one picks a bitrate from the source's actual resolution and frame rate.
 
 ## License
 
-MIT License - Feel free to use and modify as needed.
+MIT License — feel free to use and modify as needed.
 
 ## Contributing
 
