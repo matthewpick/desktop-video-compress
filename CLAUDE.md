@@ -80,6 +80,18 @@ Encodes go to a temp directory on the same volume (`.itemReplacementDirectory`) 
 
 Output lands in the folder being watched. `ProcessedMarker` (an xattr) is the primary defense; `OutputNaming.looksLikeOurOutput` is a filename-based backstop for when the xattr is stripped by a sync client.
 
+### Constant quality, with an ABR fallback
+
+Video uses VideoToolbox constant quality (`AVVideoQualityKey`) plus a
+`kVTCompressionPropertyKey_DataRateLimits` ceiling — CRF-like behavior, matching
+what HandBrake does by default. Do **not** add `AVVideoAverageBitRateKey` next to
+`AVVideoQualityKey`: they are competing rate-control modes and the bitrate target
+wins, which throws away the whole point.
+
+Constant quality is Apple Silicon only, and we ship a universal binary, so
+`makeVideoInput` probes with `writer.canAdd` and falls back to average bitrate.
+Keep that fallback.
+
 ### Two skip guards
 
 `VideoCompressor` returns `.alreadyEfficient` for HEVC sources at or below target. `CompressionQueue` discards output that saved less than `minimumSavingsFraction` (5%). Both mark the source as processed so it isn't reconsidered.

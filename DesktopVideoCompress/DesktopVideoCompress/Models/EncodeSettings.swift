@@ -1,6 +1,11 @@
 import Foundation
 
-/// How aggressively to compress. Scales the computed target bitrate.
+/// How aggressively to compress.
+///
+/// Drives VideoToolbox's constant-quality mode, which is the analogue of
+/// x265's CRF: bits go where the content needs them instead of being spent
+/// evenly. Screen recordings — long static stretches, flat UI regions — are
+/// exactly where a fixed bitrate wastes the most.
 enum QualityTier: String, CaseIterable, Identifiable, Sendable {
     case smaller
     case balanced
@@ -8,6 +13,17 @@ enum QualityTier: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
+    /// VideoToolbox quality, 0…1. Higher keeps more detail and costs bytes.
+    var qualityLevel: Double {
+        switch self {
+        case .smaller: 0.45
+        case .balanced: 0.60
+        case .higher: 0.75
+        }
+    }
+
+    /// Scales the bitrate ceiling, and the fallback average bitrate used where
+    /// constant quality isn't available.
     var multiplier: Double {
         switch self {
         case .smaller: 0.7
@@ -114,6 +130,27 @@ enum EncodeSettings {
 
         let bits = Double(pixels) * 30.0 * bitsPerPixel(forPixelCount: pixels) * fpsFactor * tier.multiplier
         return min(max(Int(bits), minimumBitrate), maximumBitrate)
+    }
+
+    /// How far above the target bitrate the hard cap sits.
+    ///
+    /// Constant quality does the real work; this only catches pathological
+    /// content (heavy grain, confetti) that would otherwise balloon. Too tight
+    /// a cap and it starts overriding the quality setting on ordinary footage,
+    /// which is the ABR behaviour we're trying to get away from.
+    static let ceilingMultiplier = 1.6
+
+    /// A `kVTCompressionPropertyKey_DataRateLimits` value: `[maxBytes, seconds]`.
+    ///
+    /// Unlike an average bitrate target this is a ceiling, not a goal, so it
+    /// composes with constant quality instead of replacing it.
+    static func dataRateLimits(
+        for dimensions: VideoDimensions,
+        frameRate: Double,
+        tier: QualityTier
+    ) -> [Any] {
+        let ceiling = Double(targetBitrate(for: dimensions, frameRate: frameRate, tier: tier)) * ceilingMultiplier
+        return [Int(ceiling / 8), 1]  // bytes per one second
     }
 
     /// Rounds both edges down to even values, never below 2.

@@ -66,15 +66,19 @@ Output files are tagged with a `com.desktopvideocompress.processed` extended att
 |---|---|---|
 | Watched folder | `~/Desktop` | Any folder you like |
 | Compress files already in the folder at launch | Off | One pass over existing files on startup |
-| Quality | Balanced | `Smaller file` (0.7×), `Balanced` (1×), `Higher quality` (1.5×) bitrate |
+| Quality | Balanced | `Smaller file`, `Balanced`, `Higher quality` — constant-quality levels |
 | Maximum size | Original | Optionally cap the longest edge at 4K / 1080p / 720p |
 | Move the original to the Trash | On | Turn off to keep both files |
 | Launch at login | On | Registered via `SMAppService` |
 | Show notifications | On | |
 
-### How the bitrate is chosen
+### How quality is chosen
 
-Target bitrate is `pixels × 30 × bits-per-pixel × (fps/30)^0.7 × quality multiplier`, where bits-per-pixel steps down as resolution rises (0.10 at 720p, 0.08 at 1080p, 0.065 at 1440p, 0.05 at 4K+). Frame rate scales sub-linearly because consecutive frames are more similar the faster you sample.
+Encoding uses VideoToolbox's **constant-quality** mode — the analogue of x265's CRF, and what HandBrake uses by default. Bits go where the content needs them, so a mostly-static screen recording produces a much smaller file than a busy one instead of both being padded to the same bitrate.
+
+A **ceiling** rides alongside it as a `DataRateLimits` cap, at 1.6× a target derived from `pixels × 30 × bits-per-pixel × (fps/30)^0.7`, where bits-per-pixel steps down as resolution rises (0.10 at 720p, 0.08 at 1080p, 0.065 at 1440p, 0.05 at 4K+). Frame rate scales sub-linearly because consecutive frames are more similar the faster you sample. The ceiling only catches pathological content — heavy grain, confetti — that would otherwise balloon.
+
+Constant quality is an Apple Silicon hardware-encoder feature. On Intel Macs the app automatically falls back to average-bitrate targeting at the same computed rate.
 
 Two guards apply:
 

@@ -17,7 +17,8 @@ enum TestClipFactory {
         frameCount: Int = 60,
         frameRate: Int32 = 30,
         codec: AVVideoCodecType = .h264,
-        bitrate: Int = 8_000_000
+        bitrate: Int = 8_000_000,
+        noisy: Bool = true
     ) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
@@ -55,7 +56,7 @@ enum TestClipFactory {
             CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer)
             guard let buffer else { throw TestClipError.setupFailed("no pixel buffer") }
 
-            fill(buffer, frame: frame, width: width, height: height)
+            fill(buffer, frame: frame, width: width, height: height, noisy: noisy)
             adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: frameRate))
         }
 
@@ -67,7 +68,7 @@ enum TestClipFactory {
         }
     }
 
-    private static func fill(_ buffer: CVPixelBuffer, frame: Int, width: Int, height: Int) {
+    private static func fill(_ buffer: CVPixelBuffer, frame: Int, width: Int, height: Int, noisy: Bool) {
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
 
@@ -82,6 +83,8 @@ enum TestClipFactory {
             return UInt8(truncatingIfNeeded: seed >> 16)
         }
 
+        guard noisy else { return fillScreenRecording(pixels, bytesPerRow: bytesPerRow, frame: frame, width: width, height: height) }
+
         for y in 0..<height {
             let row = pixels + y * bytesPerRow
             for x in 0..<width {
@@ -90,6 +93,37 @@ enum TestClipFactory {
                 row[offset + 0] = UInt8((x &+ frame &* 3) % 256) / 2 &+ noise      // B
                 row[offset + 1] = UInt8((y &+ frame &* 5) % 256) / 2 &+ noise      // G
                 row[offset + 2] = UInt8((x &+ y &+ frame) % 256) / 2 &+ noise      // R
+                row[offset + 3] = 255
+            }
+        }
+    }
+
+    /// Stands in for a screen recording: a static background with one small
+    /// moving element. Whole-frame motion, as in the noisy generator, is not
+    /// what this app mostly sees, and it hides the benefit of constant quality.
+    private static func fillScreenRecording(
+        _ pixels: UnsafeMutablePointer<UInt8>,
+        bytesPerRow: Int,
+        frame: Int,
+        width: Int,
+        height: Int
+    ) {
+        let cursorSize = 48
+        let cursorX = (frame &* 7) % max(width - cursorSize, 1)
+        let cursorY = (frame &* 3) % max(height - cursorSize, 1)
+
+        for y in 0..<height {
+            let row = pixels + y * bytesPerRow
+            // Static "window chrome" bands plus a flat background.
+            let band: UInt8 = y < height / 10 ? 60 : (y < height / 9 ? 90 : 34)
+            for x in 0..<width {
+                let offset = x * 4
+                let inCursor = x >= cursorX && x < cursorX + cursorSize
+                    && y >= cursorY && y < cursorY + cursorSize
+                let value: UInt8 = inCursor ? 240 : (x % 320 < 2 ? 70 : band)
+                row[offset + 0] = value
+                row[offset + 1] = value
+                row[offset + 2] = value
                 row[offset + 3] = 255
             }
         }
@@ -158,6 +192,68 @@ struct CompressionEndToEndTests {
             // The source is a deliberately over-bitrated H.264 encode, so HEVC
             // at our target should be comfortably smaller.
             #expect(size(of: destination) < size(of: source))
+        }
+    }
+
+    @Test("Compressible content lands far below the bitrate ceiling")
+    func constantQualitySpendsFewerBitsOnEasyContent() async throws {
+        try await withScratchDirectory { directory in
+            let source = directory.appendingPathComponent("easy.mov")
+            let destination = directory.appendingPathComponent("out.mp4")
+            let seconds = 2.0
+            try await TestClipFactory.makeClip(
+                at: source, width: 1280, height: 720, frameCount: 60, noisy: false
+            )
+
+            #expect(try await VideoCompressor().compress(
+                source: source,
+                destination: destination,
+                tier: .balanced,
+                maxDimension: .original,
+                progress: { _ in }
+            ) == .encoded)
+
+            let dimensions = VideoDimensions(width: 1280, height: 720)
+            let target = EncodeSettings.targetBitrate(for: dimensions, frameRate: 30, tier: .balanced)
+            let actualBitrate = Double(size(of: destination)) * 8 / seconds
+
+            // Under average-bitrate control this would sit near the target
+            // regardless of how little detail the content has. Constant quality
+            // should come in far under it.
+            #expect(actualBitrate < Double(target) * 0.25,
+                    "expected well under \(target) bps, got \(Int(actualBitrate)) bps")
+        }
+    }
+
+    @Test("Hard-to-encode content still respects the ceiling")
+    func ceilingHoldsOnHardContent() async throws {
+        try await withScratchDirectory { directory in
+            let source = directory.appendingPathComponent("hard.mov")
+            let destination = directory.appendingPathComponent("out.mp4")
+            let seconds = 2.0
+            // Full-frame noise: the worst case for any encoder, and what would
+            // balloon without a data rate limit.
+            try await TestClipFactory.makeClip(
+                at: source, width: 1280, height: 720, frameCount: 60,
+                bitrate: 40_000_000, noisy: true
+            )
+
+            _ = try await VideoCompressor().compress(
+                source: source,
+                destination: destination,
+                tier: .balanced,
+                maxDimension: .original,
+                progress: { _ in }
+            )
+
+            let dimensions = VideoDimensions(width: 1280, height: 720)
+            let target = EncodeSettings.targetBitrate(for: dimensions, frameRate: 30, tier: .balanced)
+            let ceiling = Double(target) * EncodeSettings.ceilingMultiplier
+            let actualBitrate = Double(size(of: destination)) * 8 / seconds
+
+            // Container overhead on a 2s clip is a few percent, hence the slack.
+            #expect(actualBitrate < ceiling * 1.25,
+                    "expected under ~\(Int(ceiling)) bps, got \(Int(actualBitrate)) bps")
         }
     }
 

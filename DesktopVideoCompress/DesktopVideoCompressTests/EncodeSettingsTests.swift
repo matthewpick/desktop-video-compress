@@ -128,6 +128,41 @@ struct EncodeSettingsTests {
         #expect(bitrate == EncodeSettings.maximumBitrate)
     }
 
+    // MARK: - Constant quality
+
+    @Test("Quality levels are ordered and stay inside VideoToolbox's 0…1 range")
+    func qualityLevelsAreOrdered() {
+        let levels = [QualityTier.smaller, .balanced, .higher].map(\.qualityLevel)
+        #expect(levels == levels.sorted())
+        #expect(levels.allSatisfy { $0 > 0 && $0 < 1 })
+    }
+
+    @Test("The data rate ceiling sits above the target, not on it")
+    func ceilingExceedsTarget() {
+        let dimensions = VideoDimensions(width: 1920, height: 1080)
+        let target = EncodeSettings.targetBitrate(for: dimensions, frameRate: 30, tier: .balanced)
+
+        let limits = EncodeSettings.dataRateLimits(for: dimensions, frameRate: 30, tier: .balanced)
+        let bytesPerWindow = try! #require(limits.first as? Int)
+        let seconds = try! #require(limits.last as? Int)
+
+        // A ceiling equal to the target would just be ABR by another name.
+        #expect(seconds == 1)
+        #expect(bytesPerWindow * 8 > target)
+        #expect(Double(bytesPerWindow * 8) <= Double(target) * EncodeSettings.ceilingMultiplier * 1.01)
+    }
+
+    @Test("The ceiling is expressed as [bytes, seconds] for VideoToolbox")
+    func ceilingShape() {
+        let limits = EncodeSettings.dataRateLimits(
+            for: VideoDimensions(width: 1280, height: 720),
+            frameRate: 30,
+            tier: .balanced
+        )
+        #expect(limits.count == 2)
+        #expect(limits.allSatisfy { $0 is Int })
+    }
+
     @Test("A tiny thumbnail-sized clip is raised to the floor")
     func floorApplies() {
         let bitrate = EncodeSettings.targetBitrate(

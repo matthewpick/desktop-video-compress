@@ -115,17 +115,17 @@ final class VideoCompressor: @unchecked Sendable {
         }
         reader.add(videoOutput)
 
-        let videoInput = AVAssetWriterInput(
-            mediaType: .video,
-            outputSettings: videoOutputSettings(target: target, bitrate: bitrate, info: info)
+        let videoInput = try makeVideoInput(
+            target: target,
+            bitrate: bitrate,
+            tier: tier,
+            info: info,
+            writer: writer
         )
         videoInput.expectsMediaDataInRealTime = false
         // Rotation stays metadata, so the encoder works on the un-rotated
         // buffers and portrait clips don't come out sideways.
         videoInput.transform = info.transform
-        guard writer.canAdd(videoInput) else {
-            throw CompressionError.writerFailed("cannot add HEVC video input")
-        }
         writer.add(videoInput)
 
         // MARK: Audio
@@ -182,13 +182,20 @@ final class VideoCompressor: @unchecked Sendable {
 
     // MARK: - Settings
 
+    /// How the encoder decides where to spend bits.
+    private enum RateControl {
+        /// Quality-targeted, the analogue of x265's CRF. Apple Silicon only.
+        case constantQuality(Double, limits: [Any])
+        /// Bitrate-targeted. The fallback for encoders without constant quality.
+        case averageBitRate(Int)
+    }
+
     private func videoOutputSettings(
         target: VideoDimensions,
-        bitrate: Int,
+        rateControl: RateControl,
         info: SourceVideoInfo
     ) -> [String: Any] {
         var compression: [String: Any] = [
-            AVVideoAverageBitRateKey: bitrate,
             AVVideoExpectedSourceFrameRateKey: Int(info.frameRate.rounded()),
             AVVideoMaxKeyFrameIntervalDurationKey: 2.0,
             AVVideoAllowFrameReorderingKey: true,
@@ -196,6 +203,16 @@ final class VideoCompressor: @unchecked Sendable {
                 ? kVTProfileLevel_HEVC_Main10_AutoLevel as String
                 : kVTProfileLevel_HEVC_Main_AutoLevel as String,
         ]
+
+        switch rateControl {
+        case .constantQuality(let quality, let limits):
+            compression[AVVideoQualityKey] = quality
+            // A ceiling rather than a target, so it composes with quality mode.
+            compression[kVTCompressionPropertyKey_DataRateLimits as String] = limits
+        case .averageBitRate(let bitrate):
+            compression[AVVideoAverageBitRateKey] = bitrate
+        }
+
         if info.isHDR {
             compression[kVTCompressionPropertyKey_HDRMetadataInsertionMode as String] =
                 kVTHDRMetadataInsertionMode_Auto as String
@@ -214,6 +231,40 @@ final class VideoCompressor: @unchecked Sendable {
             settings[AVVideoColorPropertiesKey] = colorProperties
         }
         return settings
+    }
+
+    /// Builds the video input, preferring constant quality and falling back to
+    /// average bitrate where the encoder won't take it.
+    ///
+    /// The fallback is not hypothetical: constant quality is an Apple Silicon
+    /// hardware-encoder feature, and we ship a universal binary that also runs
+    /// on Intel.
+    private func makeVideoInput(
+        target: VideoDimensions,
+        bitrate: Int,
+        tier: QualityTier,
+        info: SourceVideoInfo,
+        writer: AVAssetWriter
+    ) throws -> AVAssetWriterInput {
+        let limits = EncodeSettings.dataRateLimits(for: target, frameRate: info.frameRate, tier: tier)
+        let constantQuality = videoOutputSettings(
+            target: target,
+            rateControl: .constantQuality(tier.qualityLevel, limits: limits),
+            info: info
+        )
+
+        let candidate = AVAssetWriterInput(mediaType: .video, outputSettings: constantQuality)
+        if writer.canAdd(candidate) { return candidate }
+
+        logger.info("Constant quality unavailable; falling back to \(bitrate) bps average bitrate")
+        let fallback = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: videoOutputSettings(target: target, rateControl: .averageBitRate(bitrate), info: info)
+        )
+        guard writer.canAdd(fallback) else {
+            throw CompressionError.writerFailed("cannot add HEVC video input")
+        }
+        return fallback
     }
 
     private func makeAudioPair(
