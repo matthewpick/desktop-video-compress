@@ -1,0 +1,243 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          echo "Using Xcode: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec DesktopVideoCompress/project.yml
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Install Apple certificate
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          echo -n "$APPLE_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+
+          security import "$CERTIFICATE_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+
+      - name: Build and Sign Release
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild build \
+            -project DesktopVideoCompress/DesktopVideoCompress.xcodeproj \
+            -scheme DesktopVideoCompress \
+            -configuration Release \
+            -derivedDataPath build \
+            -arch arm64 \
+            -arch x86_64 \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --keychain $KEYCHAIN_PATH"
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="build/Build/Products/Release/Desktop Video Compress.app"
+
+          # Create a ZIP for notarization
+          ditto -c -k --keepParent "$APP_PATH" "DesktopVideoCompress.zip"
+
+          # Submit for notarization
+          xcrun notarytool submit "DesktopVideoCompress.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          # Staple the notarization ticket
+          xcrun stapler staple "$APP_PATH"
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          APP_PATH="build/Build/Products/Release/Desktop Video Compress.app"
+          DMG_NAME="DesktopVideoCompress-${{ steps.version.outputs.VERSION }}.dmg"
+
+          # Create a temporary directory for DMG contents
+          mkdir -p dmg-contents
+          cp -R "$APP_PATH" dmg-contents/
+
+          # Create the DMG
+          create-dmg \
+            --volname "Desktop Video Compress" \
+            --volicon "DesktopVideoCompress/DesktopVideoCompress/Assets.xcassets/AppIcon.appiconset/icon_512x512.png" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Desktop Video Compress.app" 150 185 \
+            --hide-extension "Desktop Video Compress.app" \
+            --app-drop-link 450 185 \
+            "$DMG_NAME" \
+            dmg-contents/ \
+            || true  # create-dmg returns non-zero even on success sometimes
+
+          # Verify DMG was created
+          if [ ! -f "$DMG_NAME" ]; then
+            echo "DMG creation failed, trying simple method..."
+            hdiutil create -volname "Desktop Video Compress" -srcfolder dmg-contents -ov -format UDZO "$DMG_NAME"
+          fi
+
+          # Sign the DMG
+          codesign --sign "Developer ID Application" --timestamp --keychain "$KEYCHAIN_PATH" "$DMG_NAME"
+
+          # Notarize the DMG
+          xcrun notarytool submit "$DMG_NAME" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --password "${{ secrets.APPLE_ID_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --wait
+
+          xcrun stapler staple "$DMG_NAME"
+
+          echo "DMG_NAME=$DMG_NAME" >> $GITHUB_ENV
+
+      - name: Calculate SHA256
+        id: sha256
+        run: |
+          SHA256=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')
+          echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+          echo "SHA256: $SHA256"
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.DMG_NAME }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Desktop Video Compress v${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') || contains(github.ref, '-rc') }}
+          generate_release_notes: true
+          files: ${{ env.DMG_NAME }}
+          body: |
+            ## Installation
+
+            ```bash
+            brew install --cask matthewpick/desktop-video-compress/desktop-video-compress
+            ```
+
+            Or download `${{ env.DMG_NAME }}` below, open it, and drag the app to Applications.
+
+            On first launch macOS asks for access to your Desktop — that is what lets
+            the app see new video files.
+
+            ## Verification
+
+            SHA256: `${{ steps.sha256.outputs.SHA256 }}`
+
+            ```bash
+            echo "${{ steps.sha256.outputs.SHA256 }}  ${{ env.DMG_NAME }}" | shasum -a 256 -c
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew tap
+        if: ${{ !contains(github.ref, '-beta') && !contains(github.ref, '-alpha') && !contains(github.ref, '-rc') }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          # Clone the tap repo
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/matthewpick/homebrew-desktop-video-compress.git tap-repo
+          cd tap-repo
+          mkdir -p Casks
+
+          # Update the cask
+          cat > Casks/desktop-video-compress.rb << 'EOF'
+          cask "desktop-video-compress" do
+            version "${{ steps.version.outputs.VERSION }}"
+            sha256 "${{ steps.sha256.outputs.SHA256 }}"
+
+            url "https://github.com/matthewpick/desktop-video-compress/releases/download/v#{version}/DesktopVideoCompress-#{version}.dmg"
+            name "Desktop Video Compress"
+            desc "Automatically compresses videos that land on your Desktop"
+            homepage "https://github.com/matthewpick/desktop-video-compress"
+
+            depends_on macos: ">= :sonoma"
+
+            app "Desktop Video Compress.app"
+
+            zap trash: [
+              "~/Library/Preferences/com.desktopvideocompress.DesktopVideoCompress.plist",
+              "~/Library/Caches/com.desktopvideocompress.DesktopVideoCompress",
+            ]
+          end
+          EOF
+
+          # Commit and push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/desktop-video-compress.rb
+          git commit -m "Update desktop-video-compress to ${{ steps.version.outputs.VERSION }}"
+          git push
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH"
+          fi
